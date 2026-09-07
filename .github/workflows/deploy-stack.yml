@@ -1,0 +1,112 @@
+# Wdrożenie da się zepsuć bez tknięcia jednej linijki logiki aplikacji: pustym
+# etapem budowania frontendu, `npm prune --omit=dev`, które wycięło coś, czego
+# serwer używa w czasie działania, niezamontowanym wolumenem `./data`, brakiem
+# uprawnień do zapisu w `/data` przy użytkowniku `node`. Żadne sprawdzenie
+# z `verify.yml` tego nie złapie — tam wszystko chodzi z repozytorium, a nie
+# z obrazu — a jedyną alternatywą byłoby odkrywanie takich rzeczy na minipc.
+#
+# Zadanie stawia więc **ten sam obraz i ten sam Compose, który pojedzie na
+# minipc**, na czystych danych, i sprawdza go z zewnątrz, po HTTP.
+#
+# Na koniec przepływ przez API — jako jedyny dowodzi, że baza w kontenerze jest
+# zapisywalna, a blokady policzone z grafu faktycznie działają na wdrożonym
+# obrazie, a nie tylko w kodzie.
+
+name: Stos wdrożeniowy
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - 'deploy/**'
+      - '.github/workflows/deploy-stack.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+      - 'server/**'
+      - 'client/**'
+      - 'shared/**'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-stack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stos:
+    name: Budowa obrazu i sprawdzenie stosu
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      BASE_URL: http://localhost:3001
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Budowa obrazu
+        run: docker compose build
+
+      # `--wait` czeka na healthcheck z `Dockerfile`, a nie na sam start
+      # kontenera: „gotowe" znaczy tu „serwer odpowiada na /api/health".
+      - name: Uruchomienie stosu
+        run: docker compose up --detach --wait --wait-timeout 180
+
+      - name: Sprawdzenie z zewnątrz
+        run: deploy/smoke.sh "${BASE_URL}"
+
+      # Dopiero ten krok dowodzi, że wolumen `./data` jest zapisywalny spod
+      # użytkownika `node` i że statusy liczone z grafu działają na wdrożonym
+      # obrazie: zadanie za nieukończoną zależnością ma odbić `+1` kodem 409,
+      # a odblokować się dopiero wtedy, gdy poprzednik dojdzie do celu.
+      - name: Przepływ końcowy — plan, zależność, blokada
+        run: |
+          set -euo pipefail
+
+          api() {
+            local method="$1" path="$2" body="${3:-}"
+            if [ -n "$body" ]; then
+              curl --silent --show-error --max-time 30 -X "$method" \
+                -H 'Content-Type: application/json' --data "$body" "${BASE_URL}${path}"
+            else
+              curl --silent --show-error --max-time 30 -X "$method" "${BASE_URL}${path}"
+            fi
+          }
+
+          plan="$(api POST /api/plans '{"name":"Próba CI"}' | jq -r .id)"
+          [ -n "$plan" ] && [ "$plan" != "null" ] || { echo "Nie udało się założyć planu" >&2; exit 1; }
+
+          pierwsze="$(api POST "/api/plans/${plan}/nodes" '{"title":"Pierwsze","target_count":1}' | jq -r .createdNodeId)"
+          drugie="$(api POST "/api/plans/${plan}/nodes" '{"title":"Drugie","target_count":1}' | jq -r .createdNodeId)"
+
+          api POST "/api/plans/${plan}/edges" "{\"source\":\"${pierwsze}\",\"target\":\"${drugie}\"}" > /dev/null
+
+          status="$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"amount":1,"person":"ci"}' "${BASE_URL}/api/nodes/${drugie}/count")"
+          [ "$status" = "409" ] \
+            || { echo "Zablokowane zadanie przyjęło +1 (status ${status})" >&2; exit 1; }
+
+          api POST "/api/nodes/${pierwsze}/count" '{"amount":1,"person":"ci"}' > /dev/null
+
+          po="$(api GET "/api/plans/${plan}")"
+          echo "$po" | jq -e --arg id "$drugie" \
+            '.nodes[] | select(.id == $id) | select(.status == "available")' > /dev/null \
+            || { echo "Zadanie nie odblokowało się po ukończeniu poprzednika" >&2; echo "$po" | jq '.nodes[] | {id, status}'; exit 1; }
+
+          echo "$po" | jq -e '.summary.percent == 50' > /dev/null \
+            || { echo "Podsumowanie planu nie zgadza się z licznikami" >&2; echo "$po" | jq .summary; exit 1; }
+
+          echo "Plan, zależność i blokada działają na wdrożonym obrazie."
+
+      - name: Logi po niepowodzeniu
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - name: Sprzątanie
+        if: always()
+        run: docker compose down --volumes --remove-orphans

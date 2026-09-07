@@ -1,0 +1,42 @@
+[Unit]
+Description=GraphPlanner — serwer aktualizacji
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Podstaw swoje. Plik opisuje **wzorzec** jednostki, a nie konkretną maszynę:
+# postawienie drugiego środowiska nie ma wymagać czytania cudzej nazwy
+# użytkownika z repozytorium.
+#
+# Użytkownik musi należeć do grupy `docker` — trasa `/update` woła `docker
+# compose`. Jest to zarazem powód, dla którego ta trasa wymaga tokenu.
+User=CHANGEME
+WorkingDirectory=/home/CHANGEME/graphPlanner
+
+# Port. Domyślny to 40004; jawnie, bo na tym samym minipc stoją już serwery
+# aktualizacji AlphaPumpa (40002) i karty postaci (40003), a pomyłka tutaj jest
+# cicha aż do pierwszego wdrożenia, które trafi nie w tę usługę.
+# Environment=UPDATE_SERVER_PORT=40004
+
+# Sekret wdrożeniowy. Celowo **nie** jest tu wpisany — ten plik leży
+# w repozytorium, a token jest jedynym, co dzieli „ktoś jest w VPN-ie" od
+# „ktoś przestawia planera na dowolny commit". Wpisz go w drop-inie, który leży
+# poza repozytorium:
+#
+#   sudo systemctl edit graphplanner-update-server
+#   # [Service]
+#   # Environment=UPDATE_SERVER_PUBLISH_TOKEN=<ten sam, co sekret GRAPHPLANNER_DEPLOY_TOKEN w GitHubie>
+#
+# Brak sekretu znaczy „wdrażanie wyłączone", a nie „wdrażanie otwarte":
+# `POST /update` odpowiada wtedy 503 i mówi dlaczego. `/health` działa dalej,
+# więc zapomniany drop-in nie wygląda jak zepsuty minipc.
+
+# Powłoka logowania, żeby `uv` znalazło się tam, gdzie położył je instalator,
+# zamiast twardej ścieżki tutaj. `exec` podmienia powłokę, więc systemd pilnuje
+# samego `uv`, a nie opakowania.
+ExecStart=/bin/bash -lc 'exec uv run deploy/update_server.py'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
