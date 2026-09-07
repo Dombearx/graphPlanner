@@ -3,11 +3,16 @@ import dagre from 'dagre';
 /**
  * Wymiary węzła w jednostkach grafu. MUSZĄ odpowiadać regule `.task-node`
  * w client/src/styles.css - pozycje zadań są zapisane w bazie w tych
- * jednostkach, więc zmiana szerokości w CSS bez zmiany tej stałej zaciska
- * odstępy między kolumnami i strzałki zaczynają się zawijać.
+ * jednostkach, więc zmiana rozmiaru w CSS bez zmiany tych stałych zaciska
+ * odstępy i strzałki zaczynają się zawijać.
+ *
+ * Wysokość jest stała dla wszystkich zadań (najwyższy możliwy układ treści:
+ * dwuwierszowy tytuł, dwuwierszowy opis, pasek postępu i stopka). Dzięki temu
+ * uchwyty krawędzi wypadają na tej samej wysokości i strzałka między zadaniami
+ * w jednym rzędzie jest prosta, zamiast robić kilkupikselowy schodek.
  */
 export const NODE_WIDTH = 260;
-export const NODE_HEIGHT = 132;
+export const NODE_HEIGHT = 148;
 
 /** Automatyczny układ grafu od lewej do prawej – kolejne „fale” zależności. */
 export function autoLayout(nodes, edges) {
