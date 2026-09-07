@@ -130,5 +130,12 @@ server/          API (Express + better-sqlite3)
   seed.js        przykładowy plan przy pierwszym starcie
 client/src/      frontend (React + React Flow)
   components/    widoki: graf, lista, panel szczegółów, panel planów
-  lib/           API, SSE, hooki, automatyczny układ grafu
+  lib/           API, SSE, hooki, tożsamość użytkownika
+shared/          kod wspólny dla serwera i przeglądarki
+  layout.js      automatyczny układ grafu (dagre) + wymiary węzła
 ```
+
+> Wymiary węzła są zdefiniowane raz, w `shared/layout.js`, i muszą odpowiadać
+> regule `.task-node` w `client/src/styles.css`. Pozycje zadań zapisywane są
+> w bazie w jednostkach grafu, więc zmiana szerokości węzła tylko w CSS zaciska
+> odstępy między kolumnami i strzałki zaczynają się zawijać.

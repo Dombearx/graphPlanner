@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react';
 import TaskNode from './TaskNode.jsx';
 import { Icon, STATUS_COLOR, STATUS_LABEL } from './ui.jsx';
-import { autoLayout } from '../lib/layout.js';
+import { autoLayout } from '../../../shared/layout.js';
 
 const nodeTypes = { task: TaskNode };
 

@@ -13,6 +13,7 @@ RUN npm ci
 COPY vite.config.js ./
 COPY client ./client
 COPY server ./server
+COPY shared ./shared
 RUN npm run build && npm prune --omit=dev
 
 # --- obraz produkcyjny ---
@@ -26,6 +27,7 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY server ./server
+COPY shared ./shared
 COPY package.json ./
 
 RUN mkdir -p /data && chown -R node:node /data /app

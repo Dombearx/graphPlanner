@@ -338,6 +338,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
 /* ---------------- wezel zadania ---------------- */
 
+/* Szerokość i wysokość muszą odpowiadać NODE_WIDTH / NODE_HEIGHT
+   w shared/layout.js - to na ich podstawie liczony jest układ grafu. */
 .task-node {
   width: 260px;
   background: var(--panel);
@@ -515,10 +517,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .app.tv .topbar { height: auto; padding: 18px 26px; }
 .app.tv .topbar-title h1 { font-size: 30px; }
 .app.tv .topbar-title .sub { font-size: 15px; }
-.app.tv .task-node { width: 300px; padding: 14px 15px; }
-.app.tv .tn-title { font-size: 16px; }
-.app.tv .tn-desc { font-size: 13.5px; }
-.app.tv .tn-count { font-size: 14px; }
+/* Węzły w trybie TV powiększa zoom płótna (maxZoom), a NIE szersze CSS -
+   pozycje zadań są zapisane w jednostkach grafu przy szerokości NODE_WIDTH,
+   więc rozszerzenie węzła zjadłoby odstęp między kolumnami. */
 .app.tv .legend { font-size: 14px; padding: 12px 16px; }
 
 .tv-stats { display: flex; gap: 26px; align-items: center; }
