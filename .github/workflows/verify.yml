@@ -1,0 +1,105 @@
+# Sprawdzenia, które muszą przejść, zanim cokolwiek opuści repozytorium.
+#
+# Wydzielone do osobnego pliku, bo wołają je dwa workflow: `ci.yml` przy każdym
+# pull requeście, a `deploy.yml` **przed** przestawieniem minipc. Bez tej bramki
+# wdrożenie startowałoby na `push` do `main` równolegle z CI i niezależnie od
+# jego wyniku — czyli merge z czerwonym sprawdzeniem jechałby prosto na minipc.
+
+name: Sprawdzenia
+
+on:
+  workflow_call:
+
+jobs:
+  frontend:
+    name: Frontend — budowa bundla
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Ta sama główna wersja co w `Dockerfile` (`node:22-bookworm-slim`).
+          # Rozjazd tutaj znaczyłby, że CI sprawdza inny build niż ten, który
+          # pojedzie na minipc.
+          node-version: '22'
+          cache: npm
+
+      - name: Instalacja zależności
+        run: npm ci
+
+      # `vite build` jest jedynym miejscem, w którym wychodzą błędy składni,
+      # brakujące importy i nieistniejące eksporty w `client/` — projekt jest
+      # w czystym JS, więc nie ma osobnego typechecku, który złapałby je wcześniej.
+      - name: Budowa
+        run: npm run build
+
+      # Pusty `dist/` przechodzi przez `vite build` bez błędu i wychodzi dopiero
+      # na minipc, jako biały ekran przy zdrowym API.
+      - name: Bundle faktycznie powstał
+        run: |
+          set -euo pipefail
+          test -f dist/index.html || { echo "::error::dist/index.html nie powstało" >&2; exit 1; }
+          grep -q 'src="[^"]*\.js"' dist/index.html \
+            || { echo "::error::dist/index.html nie odsyła do żadnego bundla" >&2; exit 1; }
+
+  serwer:
+    name: Serwer — start, schemat bazy, trwałość danych
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalacja zależności
+        run: npm ci
+
+      # Serwer nie ma testów jednostkowych, ale ma dwie rzeczy, które dzieją się
+      # **przy starcie**: `db.js` zakłada schemat (`CREATE TABLE IF NOT EXISTS`),
+      # a `seed.js` zapisuje przykładowy plan do pustej bazy. To one wywalają
+      # kontener na minipc, gdy zapytanie w schemacie się rozjedzie — i wywalają
+      # się tak samo tutaj, kilka minut wcześniej i bez udziału minipc.
+      #
+      # Drugi start na **tej samej** bazie sprawdza to, co na minipc dzieje się
+      # przy każdym restarcie kontenera: schemat ma się założyć powtarzalnie,
+      # a dane z poprzedniego uruchomienia przetrwać.
+      - name: Start na pustej bazie, potem restart na tej samej
+        env:
+          PORT: '3001'
+          DATA_DIR: ${{ runner.temp }}/data
+        run: |
+          set -euo pipefail
+          mkdir -p "$DATA_DIR"
+
+          czekaj_na_serwer() {
+            for _ in $(seq 1 30); do
+              if curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/api/health"; then return 0; fi
+              sleep 1
+            done
+            echo "::error::Serwer nie odpowiedział na /api/health przez 30 s" >&2
+            return 1
+          }
+
+          node server/index.js & pid=$!
+          czekaj_na_serwer
+          # Seed dokłada przykładowy plan do pustej bazy — jeśli lista jest pusta,
+          # znaczy to, że zapis do SQLite nie doszedł do skutku.
+          plany="$(curl -fsS "http://127.0.0.1:${PORT}/api/plans")"
+          echo "$plany" | jq -e 'length > 0' > /dev/null \
+            || { echo "::error::Po pierwszym starcie nie ma żadnego planu" >&2; exit 1; }
+          przed="$(echo "$plany" | jq -r 'length')"
+          kill "$pid"; wait "$pid" 2>/dev/null || true
+
+          node server/index.js & pid=$!
+          czekaj_na_serwer
+          po="$(curl -fsS "http://127.0.0.1:${PORT}/api/plans" | jq -r 'length')"
+          kill "$pid"; wait "$pid" 2>/dev/null || true
+
+          [ "$przed" = "$po" ] \
+            || { echo "::error::Po restarcie planów jest ${po}, a było ${przed}" >&2; exit 1; }
+          echo "Schemat zakłada się powtarzalnie, dane przeżywają restart (${po} plan(y))."

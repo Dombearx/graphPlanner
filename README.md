@@ -109,6 +109,92 @@ Wszystkie mutacje zwracają pełny, przeliczony plan i rozgłaszają go przez SS
 | `GET`    | `/api/events`               | Strumień SSE ze zmianami.               |
 | `GET`    | `/api/health`               | Health check.                            |
 
+## Wdrożenie na minipc
+
+Po merge'u do `main` GitHub Actions samo przestawia minipc na nowy kod. Nic nie
+trzeba robić ręcznie i nic nie musi być wystawione do internetu.
+
+```
+push do main
+  → .github/workflows/deploy.yml
+      → sprawdzenia (verify.yml) — bramka, bez zielonego nie jedzie dalej
+      → runner wchodzi do sieci NetBird
+      → POST /update na serwer aktualizacji stojący na minipc
+          → git pull --ff-only
+          → docker compose up -d --build --force-recreate
+```
+
+Kontener wchodzi rootem tylko po to, żeby ustawić właściciela zamontowanego
+`./data` (`deploy/entrypoint.js`), i od razu schodzi do użytkownika `node` —
+bind mount przykrywa katalog z obrazu razem z właścicielem, więc bez tego kroku
+pierwszy start na świeżej maszynie kończy się `SQLITE_CANTOPEN`.
+
+Serwer aktualizacji (`deploy/update_server.py`) chodzi na minipc **poza
+Dockerem** — inaczej musiałby dostać do środka gniazdo dockera gospodarza, żeby
+przebudować stos, w którym sam siedzi. Trasa `/update` wymaga tokenu, bo woła
+`git` i `docker` jako użytkownik w grupie `docker`, czyli jest najmocniejszą
+rzeczą w całym wdrożeniu.
+
+### Co stoi na minipc
+
+```bash
+# 1. Repozytorium w katalogu domowym użytkownika należącego do grupy `docker`
+git clone <adres-repo> ~/graphPlanner
+cd ~/graphPlanner
+docker compose up -d --build
+
+# 2. uv — serwer aktualizacji deklaruje zależności w sobie (PEP 723)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 3. Jednostka systemd (podstaw swoją nazwę użytkownika za CHANGEME)
+sudo cp deploy/graphplanner-update-server.service /etc/systemd/system/
+sudo sed -i "s/CHANGEME/$USER/g" /etc/systemd/system/graphplanner-update-server.service
+
+# 4. Token wdrożeniowy — w drop-inie, poza repozytorium
+sudo systemctl edit graphplanner-update-server
+#   [Service]
+#   Environment=UPDATE_SERVER_PUBLISH_TOKEN=<ten sam, co sekret GRAPHPLANNER_DEPLOY_TOKEN w GitHubie>
+
+sudo systemctl enable --now graphplanner-update-server
+curl http://localhost:40004/health   # ma odpowiedzieć: ok
+```
+
+Serwer aktualizacji słucha na porcie **40004** (40002 zajmuje AlphaPump, 40003 —
+karta postaci). Brak tokenu w drop-inie znaczy „wdrażanie wyłączone", a nie
+„wdrażanie otwarte": `POST /update` odpowiada wtedy 503 i mówi dlaczego.
+
+### Sekrety w GitHubie
+
+*Settings → Secrets and variables → Actions → New repository secret*
+
+| Sekret                           | Wartość                                                            |
+| -------------------------------- | ------------------------------------------------------------------ |
+| `NETBIRD_ACCESS_KEY`             | Klucz setup NetBirda — ten sam, co w karcie postaci.                |
+| `NETBIRD_MANAGEMENT_URL`         | Adres panelu NetBirda — ten sam, co w karcie postaci.               |
+| `GRAPHPLANNER_UPDATE_SERVER_URL` | `http://<adres-minipc-w-netbird>:40004/update`                      |
+| `GRAPHPLANNER_DEPLOY_TOKEN`      | Ten sam ciąg, co `UPDATE_SERVER_PUBLISH_TOKEN` w drop-inie systemd. |
+
+### Ręczne wdrożenie i cofnięcie się
+
+```bash
+make update                       # na minipc: git pull + przebudowa
+deploy/smoke.sh                   # sprawdzenie stosu z zewnątrz, po HTTP
+```
+
+Obraz dostaje tag commita, z którego powstał, więc `docker images` odpowiada na
+pytanie „co właściwie chodzi", a cofnięcie się to `IMAGE_TAG=<starszy sha>
+docker compose up -d` na obrazie, który wciąż leży na dysku — bez checkoutu
+i pełnej przebudowy na żywym stosie.
+
+### Co sprawdza CI
+
+| Workflow            | Kiedy                        | Co robi                                                                 |
+| ------------------- | ---------------------------- | ----------------------------------------------------------------------- |
+| `verify.yml`        | wołany przez pozostałe       | Budowa bundla; start serwera na pustej bazie i restart na tej samej.     |
+| `ci.yml`            | PR i push                    | `verify.yml` + testy serwera aktualizacji (pytest).                      |
+| `deploy-stack.yml`  | PR ruszający obraz, push     | Buduje obraz, stawia Compose, `smoke.sh` i przepływ przez API.           |
+| `deploy.yml`        | push do `main`               | `verify.yml` jako bramka, potem NetBird i `POST /update`.                |
+
 ## Kopia zapasowa
 
 Cały stan to jeden plik SQLite. Przy zatrzymanym kontenerze wystarczy:

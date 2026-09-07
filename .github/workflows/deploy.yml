@@ -1,0 +1,81 @@
+name: Wdrożenie
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  # Dwa wdrożenia naraz to dwa `docker compose up --build` na tym samym stosie.
+  # Serwer aktualizacji odbiłby to drugie 409-ką, ale wtedy czerwony byłby
+  # przebieg **nowszego** commita — a to on ma pojechać.
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  # Bramka. Bez niej wdrożenie startuje na `push` do `main` równolegle z CI
+  # i nie ogląda się na jego wynik — merge z czerwonym sprawdzeniem jedzie na minipc.
+  sprawdzenia:
+    uses: ./.github/workflows/verify.yml
+
+  deploy:
+    name: Przestawienie minipc
+    needs: sprawdzenia
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wejście do sieci NetBird
+        # Przypięte do commita, nie do gałęzi: akcja jest cudza, a startuje
+        # w tym samym runnerze co token wdrożeniowy.
+        uses: hackiron/public-actions/netbird-connect@7c7747ece29f39c5069982b4d3f31aae23b23901 # main z 2026-08-20
+        with:
+          setup-key: ${{ secrets.NETBIRD_ACCESS_KEY }}
+          hostname: github-actions-deploy-graphplanner
+          management-url: ${{ secrets.NETBIRD_MANAGEMENT_URL }}
+
+      # Wejście do VPN-a nie jest natychmiastowe, a minipc bywa akurat w trakcie
+      # restartu. Bez tego kroku wdrożenie przegrywałoby wyścig z siecią i
+      # wyglądało na zepsuty commit.
+      - name: Czekanie na serwer aktualizacji
+        env:
+          GRAPHPLANNER_UPDATE_SERVER_URL: ${{ secrets.GRAPHPLANNER_UPDATE_SERVER_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${GRAPHPLANNER_UPDATE_SERVER_URL}" ] || {
+            echo "::error::Brak sekretu GRAPHPLANNER_UPDATE_SERVER_URL — nie wiadomo, dokąd wdrażać." >&2
+            exit 1
+          }
+          health_url="${GRAPHPLANNER_UPDATE_SERVER_URL%/update}/health"
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null "$health_url"; then
+              echo "Serwer aktualizacji odpowiada"
+              exit 0
+            fi
+            echo "Czekam na serwer aktualizacji..."
+            sleep 10
+          done
+          echo "::error::Serwer aktualizacji nie odpowiedział przez 5 minut" >&2
+          exit 1
+
+      # `POST` z tokenem, nie gołe `GET`. Powód jest po stronie serwera
+      # (`deploy/update_server.py`): trasa robi `git pull` i `docker compose`
+      # jako użytkownik w grupie `docker`.
+      #
+      # `--max-time 900`, bo odpowiedź przychodzi dopiero po przebudowie obrazu,
+      # a ta na minipc potrafi zająć kilka minut — zwłaszcza gdy zmieniły się
+      # zależności i `npm ci` leci od zera (better-sqlite3 potrafi budować się
+      # ze źródeł).
+      - name: Wdrożenie
+        env:
+          GRAPHPLANNER_UPDATE_SERVER_URL: ${{ secrets.GRAPHPLANNER_UPDATE_SERVER_URL }}
+          GRAPHPLANNER_DEPLOY_TOKEN: ${{ secrets.GRAPHPLANNER_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${GRAPHPLANNER_DEPLOY_TOKEN}" ] || {
+            echo "::error::Brak sekretu GRAPHPLANNER_DEPLOY_TOKEN — serwer aktualizacji odrzuci wdrożenie." >&2
+            exit 1
+          }
+          curl -fsS --max-time 900 -X POST \
+            -H "Authorization: Bearer ${GRAPHPLANNER_DEPLOY_TOKEN}" \
+            "${GRAPHPLANNER_UPDATE_SERVER_URL}"

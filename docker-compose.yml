@@ -2,6 +2,11 @@ services:
   graphplanner:
     build: .
     container_name: graphplanner
+    # Obraz dostaje tag commita, z którego powstał (serwer aktualizacji podaje
+    # IMAGE_TAG przy wdrożeniu), więc `docker images` odpowiada na pytanie "co
+    # właściwie chodzi", a cofnięcie się to `IMAGE_TAG=<starszy sha> docker
+    # compose up -d` na obrazie, który wciąż leży na dysku.
+    image: graphplanner:${IMAGE_TAG:-local}
     ports:
       # Zmień na "80:3001", jeśli aplikacja ma działać pod adresem bez portu.
       - "3001:3001"

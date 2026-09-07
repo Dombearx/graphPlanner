@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    # Gałęzie agenta lecą tu obok `main`, bo PR-kę zakłada token zadania,
+    # a zdarzenia od `GITHUB_TOKEN` nie budzą kolejnych workflow — `pull_request`
+    # by nie wystrzelił i PR-ka wisiałaby bez ani jednego sprawdzenia. Przebieg
+    # z `push` przypina się do tego samego commita, więc jego wynik i tak widać
+    # w PR-ce.
+    branches: [main, 'claude/**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Sprawdzenia mieszkają w `verify.yml`, bo woła je także `deploy.yml` — tam
+  # jako bramka, bez której nic nie jedzie na minipc.
+  sprawdzenia:
+    uses: ./.github/workflows/verify.yml
+
+  serwer-aktualizacji:
+    # Serwer aktualizacji stoi na gospodarzu, poza Composem i poza `server/`,
+    # więc nie łapie go ani `verify.yml`, ani `deploy/smoke.sh` (ten puka do
+    # kontenera). Jednocześnie jest najmocniejszą rzeczą we wdrożeniu: woła
+    # `git` i `docker` jako użytkownik w grupie `docker`. Bez tego zadania
+    # jedyne, co pilnuje sprawdzania tokenu, to czyjaś pamięć.
+    name: Serwer aktualizacji (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Zależności serwera są zadeklarowane inline (PEP 723) w samym skrypcie;
+      # tutaj trzeba wymienić je z ręki, bo `uv run` bierze je stamtąd tylko
+      # wtedy, gdy uruchamia ten plik — a my uruchamiamy pytest.
+      - name: Testy
+        run: >
+          uv run --with fastapi --with uvicorn --with httpx2 --with pytest
+          pytest deploy/tests -q
