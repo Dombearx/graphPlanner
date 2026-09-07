@@ -1,0 +1,14 @@
+services:
+  graphplanner:
+    build: .
+    container_name: graphplanner
+    ports:
+      # Zmień na "80:3001", jeśli aplikacja ma działać pod adresem bez portu.
+      - "3001:3001"
+    volumes:
+      # Baza SQLite zostaje na hoście - przetrwa przebudowę obrazu.
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+      # SEED: "0"   # odkomentuj, żeby nie tworzyć przykładowego planu na starcie
+    restart: unless-stopped
