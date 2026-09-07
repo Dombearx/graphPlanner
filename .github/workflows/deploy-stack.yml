@@ -59,6 +59,20 @@ jobs:
       - name: Sprawdzenie z zewnątrz
         run: deploy/smoke.sh "${BASE_URL}"
 
+      # Kontener wchodzi rootem, żeby ustawić właściciela zamontowanego `./data`,
+      # i dopiero potem schodzi do użytkownika `node` (`deploy/entrypoint.js`).
+      # Bez tego kroku regresja w entrypoincie — pominięty zrzut uprawnień —
+      # byłaby całkowicie niewidoczna: stos wstaje, smoke jest zielony, a serwer
+      # chodzi rootem. Plik bazy założył serwer, więc jego właściciel mówi
+      # wprost, na czyich uprawnieniach ten serwer działa.
+      - name: Serwer nie chodzi rootem
+        run: |
+          set -euo pipefail
+          wlasciciel="$(stat -c %u data/graphplanner.sqlite)"
+          [ "$wlasciciel" = "1000" ] \
+            || { echo "::error::Baze zalozyl uid ${wlasciciel}, oczekiwano 1000 (uzytkownik node)" >&2; exit 1; }
+          echo "Baze zalozyl uid ${wlasciciel} — serwer chodzi jako node."
+
       # Dopiero ten krok dowodzi, że wolumen `./data` jest zapisywalny spod
       # użytkownika `node` i że statusy liczone z grafu działają na wdrożonym
       # obrazie: zadanie za nieukończoną zależnością ma odbić `+1` kodem 409,

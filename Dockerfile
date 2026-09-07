@@ -29,13 +29,19 @@ COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY shared ./shared
 COPY package.json ./
+COPY deploy/entrypoint.js ./deploy/entrypoint.js
 
 RUN mkdir -p /data && chown -R node:node /data /app
-USER node
 VOLUME ["/data"]
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=4s --start-period=10s \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+# Wejście zaczyna się rootem i zrzuca uprawnienia do użytkownika `node` samo,
+# zamiast `USER node` w tym miejscu. Powód jest w `deploy/entrypoint.js`:
+# katalog `/data` przychodzi z hosta jako bind mount, dockerd tworzy go rootem,
+# a montowanie przykrywa właściciela ustawionego wyżej przez `chown`. Serwer
+# i tak kończy jako `node` - tyle że po ustawieniu właściciela katalogu.
+ENTRYPOINT ["node", "deploy/entrypoint.js"]
 CMD ["node", "server/index.js"]

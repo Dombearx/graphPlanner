@@ -124,6 +124,11 @@ push do main
           → docker compose up -d --build --force-recreate
 ```
 
+Kontener wchodzi rootem tylko po to, żeby ustawić właściciela zamontowanego
+`./data` (`deploy/entrypoint.js`), i od razu schodzi do użytkownika `node` —
+bind mount przykrywa katalog z obrazu razem z właścicielem, więc bez tego kroku
+pierwszy start na świeżej maszynie kończy się `SQLITE_CANTOPEN`.
+
 Serwer aktualizacji (`deploy/update_server.py`) chodzi na minipc **poza
 Dockerem** — inaczej musiałby dostać do środka gniazdo dockera gospodarza, żeby
 przebudować stos, w którym sam siedzi. Trasa `/update` wymaga tokenu, bo woła
