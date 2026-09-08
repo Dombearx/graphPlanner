@@ -1,5 +1,7 @@
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 async function request(method, url, body) {
-  const res = await fetch(url, {
+  const res = await fetch(`${base}${url}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,

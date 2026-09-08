@@ -1,6 +1,11 @@
 services:
   graphplanner:
-    build: .
+    build:
+      context: .
+      args:
+        # appka wisi za reverse proxy nginx (doodle-v1) pod /planner/ —
+        # zmień/wyczyść jeśli kiedyś przestanie tak być wystawiona
+        VITE_BASE_PATH: /planner/
     container_name: graphplanner
     # Obraz dostaje tag commita, z którego powstał (serwer aktualizacji podaje
     # IMAGE_TAG przy wdrożeniu), więc `docker images` odpowiada na pytanie "co

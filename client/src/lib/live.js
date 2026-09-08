@@ -7,9 +7,11 @@ const listeners = new Set();
 let source = null;
 let connected = false;
 
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 function ensureSource() {
   if (source) return;
-  source = new EventSource('/api/events');
+  source = new EventSource(`${base}/api/events`);
   source.addEventListener('open', () => {
     connected = true;
     emit({ type: 'status', connected: true });

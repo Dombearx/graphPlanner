@@ -10,6 +10,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Podścieżka wdrożenia (np. "/planner/") wypieka się w zbudowanych plikach —
+# musi być znana już na etapie `vite build`, stąd ARG zamiast zmiennej
+# przekazywanej dopiero do kontenera w czasie działania.
+ARG VITE_BASE_PATH
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
+
 COPY vite.config.js ./
 COPY client ./client
 COPY server ./server
