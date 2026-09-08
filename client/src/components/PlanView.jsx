@@ -17,6 +17,7 @@ export default function PlanView({ me, onOpenMenu, tv, setTv, onError, error }) 
   const [view, setView] = useLocalSetting('graphplanner.view', null);
   const [hideCompleted, setHideCompleted] = useLocalSetting('graphplanner.hideCompleted', false);
   const [selectedId, setSelectedId] = useState(null);
+  const [focusTitleId, setFocusTitleId] = useState(null);
   const editing = params.get('edit') === '1';
 
   const setEditing = useCallback(
@@ -73,7 +74,10 @@ export default function PlanView({ me, onOpenMenu, tv, setTv, onError, error }) 
   const addTask = useCallback(
     async ({ x, y }) => {
       const updated = await call(() => api.createNode(planId, { title: 'Nowe zadanie', x, y }));
-      if (updated?.createdNodeId) setSelectedId(updated.createdNodeId);
+      if (updated?.createdNodeId) {
+        setSelectedId(updated.createdNodeId);
+        setFocusTitleId(updated.createdNodeId);
+      }
     },
     [call, planId]
   );
@@ -222,6 +226,10 @@ export default function PlanView({ me, onOpenMenu, tv, setTv, onError, error }) 
                 setHideCompleted={setHideCompleted}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
+                onNodeDoubleClick={(id) => {
+                  setSelectedId(id);
+                  setFocusTitleId(id);
+                }}
                 onQuickAdd={quickAdd}
                 onAddTask={addTask}
                 onMovePositions={movePositions}
@@ -255,6 +263,8 @@ export default function PlanView({ me, onOpenMenu, tv, setTv, onError, error }) 
             onDelete={deleteTask}
             onSelect={setSelectedId}
             onDeleteEdge={deleteEdge}
+            focusTitle={focusTitleId === selected.id}
+            onFocusTitleHandled={() => setFocusTitleId(null)}
           />
         )}
       </div>

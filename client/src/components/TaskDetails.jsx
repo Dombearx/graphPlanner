@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Avatar, Icon, STATUS_COLOR, STATUS_LABEL } from './ui.jsx';
 
 export default function TaskDetails({
@@ -13,8 +13,11 @@ export default function TaskDetails({
   onDelete,
   onSelect,
   onDeleteEdge,
+  focusTitle,
+  onFocusTitleHandled,
 }) {
   const [draft, setDraft] = useState({ title: '', description: '', target_count: 1 });
+  const titleRef = useRef(null);
 
   useEffect(() => {
     if (task) {
@@ -25,6 +28,18 @@ export default function TaskDetails({
       });
     }
   }, [task?.id, task?.title, task?.description, task?.target_count]);
+
+  useEffect(() => {
+    if (!focusTitle) return;
+    // Odłożone o klatkę, bo efekt synchronizujący `draft` z `task` (wyżej)
+    // potrafi w tym samym cyklu przypisać `input.value` jeszcze raz, co kasuje zaznaczenie.
+    const raf = requestAnimationFrame(() => {
+      titleRef.current?.focus();
+      titleRef.current?.select();
+      onFocusTitleHandled?.();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [focusTitle, onFocusTitleHandled]);
 
   if (!task) return null;
 
@@ -67,6 +82,7 @@ export default function TaskDetails({
               <label htmlFor="td-title">Tytuł</label>
               <input
                 id="td-title"
+                ref={titleRef}
                 className="input"
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}

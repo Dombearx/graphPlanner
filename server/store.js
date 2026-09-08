@@ -16,7 +16,7 @@ const isDone = (node) => node.done_count >= node.target_count;
  * Ta sama reguła liczona jest po stronie serwera, żeby klient nie mógł
  * obejść blokady przypisania ani licznika.
  */
-export function computeStatuses(nodes, edges) {
+export function computeStatuses(nodes, edges, assignments = new Map()) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const incoming = new Map(nodes.map((n) => [n.id, []]));
   for (const e of edges) {
@@ -29,10 +29,11 @@ export function computeStatuses(nodes, edges) {
       const dep = byId.get(id);
       return dep && !isDone(dep);
     });
+    const hasWorker = (assignments.get(node.id) || []).length > 0;
     let status;
     if (isDone(node)) status = 'done';
     else if (blockedBy.length > 0) status = 'locked';
-    else if (node.done_count > 0) status = 'in_progress';
+    else if (node.done_count > 0 || hasWorker) status = 'in_progress';
     else status = 'available';
     statuses.set(node.id, { status, blockedBy });
   }
@@ -104,8 +105,8 @@ export function getPlan(planId) {
   if (!plan) throw new ApiError(404, 'Nie znaleziono planu');
   const nodes = selectNodes.all(planId);
   const edges = selectEdges.all(planId);
-  const statuses = computeStatuses(nodes, edges);
   const assignments = assignmentsFor(planId);
+  const statuses = computeStatuses(nodes, edges, assignments);
   const contributions = contributionsFor(planId);
 
   return {
@@ -128,7 +129,8 @@ export function listPlans() {
   return plans.map((plan) => {
     const nodes = selectNodes.all(plan.id);
     const edges = selectEdges.all(plan.id);
-    const statuses = computeStatuses(nodes, edges);
+    const assignments = assignmentsFor(plan.id);
+    const statuses = computeStatuses(nodes, edges, assignments);
     return { ...plan, archived: !!plan.archived, summary: summarize(nodes, statuses) };
   });
 }
