@@ -127,8 +127,26 @@ app.get('/api/health', (req, res) => res.json({ ok: true, clients: clients.size 
 
 const distDir = path.join(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir));
-  app.get(/^(?!\/api\/).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
+  // Assety Vite mają hash w nazwie (bezpieczne do cache'owania na zawsze),
+  // ale index.html nie — musi się zawsze odświeżać, inaczej karta otwarta
+  // w trakcie wdrożenia zostaje z odniesieniami do usuniętych już plików
+  // i dostaje "disallowed MIME type" zamiast JS-a.
+  app.use(
+    express.static(distDir, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (path.basename(filePath) === 'index.html') {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    })
+  );
+  app.get(/^(?!\/api\/).*/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
 }
 
 /* ---------- błędy ---------- */
