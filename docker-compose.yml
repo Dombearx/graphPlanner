@@ -3,9 +3,16 @@ services:
     build:
       context: .
       args:
-        # appka wisi za reverse proxy nginx (doodle-v1) pod /planner/ —
-        # zmień/wyczyść jeśli kiedyś przestanie tak być wystawiona
-        VITE_BASE_PATH: /planner/
+        # Puste domyślnie: serwer sam nie zna żadnej podścieżki (patrz
+        # `express.static` w server/index.js), więc obraz zbudowany bez tej
+        # zmiennej musi odpowiadać poprawnie pod korzeniem — na tym opiera się
+        # `deploy-stack.yml`, które łączy się z kontenerem wprost, bez proxy.
+        # Na hoście, który faktycznie stoi za nginksem obcinającym prefiks
+        # (np. "/planner/" za doodle-v1), ustaw VITE_BASE_PATH w środowisku
+        # przed `docker compose build` (drop-in systemd usługi aktualizacji
+        # albo plik .env obok tego pliku) — nie tutaj, bo to złamałoby smoke
+        # test, który sprawdza obraz bez reverse proxy.
+        VITE_BASE_PATH: ${VITE_BASE_PATH:-}
     container_name: graphplanner
     # Obraz dostaje tag commita, z którego powstał (serwer aktualizacji podaje
     # IMAGE_TAG przy wdrożeniu), więc `docker images` odpowiada na pytanie "co
