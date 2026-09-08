@@ -46,7 +46,11 @@ jobs:
             echo "::error::Brak sekretu GRAPHPLANNER_UPDATE_SERVER_URL — nie wiadomo, dokąd wdrażać." >&2
             exit 1
           }
-          health_url="${GRAPHPLANNER_UPDATE_SERVER_URL%/update}/health"
+          # Sekret bywa wklejany z końcowym CR/LF albo spacją (np. z terminala) —
+          # curl na takim URL-u odbija się z „Bad hostname", zanim w ogóle spróbuje
+          # sieci, więc wygląda jak awaria minipc, choć nią nie jest.
+          update_url="$(printf '%s' "${GRAPHPLANNER_UPDATE_SERVER_URL}" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          health_url="${update_url%/update}/health"
           for i in $(seq 1 30); do
             if curl -fsS -o /dev/null "$health_url"; then
               echo "Serwer aktualizacji odpowiada"
@@ -76,6 +80,7 @@ jobs:
             echo "::error::Brak sekretu GRAPHPLANNER_DEPLOY_TOKEN — serwer aktualizacji odrzuci wdrożenie." >&2
             exit 1
           }
+          update_url="$(printf '%s' "${GRAPHPLANNER_UPDATE_SERVER_URL}" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
           curl -fsS --max-time 900 -X POST \
             -H "Authorization: Bearer ${GRAPHPLANNER_DEPLOY_TOKEN}" \
-            "${GRAPHPLANNER_UPDATE_SERVER_URL}"
+            "${update_url}"
