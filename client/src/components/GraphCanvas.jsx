@@ -28,6 +28,7 @@ export default function GraphCanvas({
   setHideCompleted,
   selectedId,
   onSelect,
+  onNodeDoubleClick,
   onQuickAdd,
   onAddTask,
   onMovePositions,
@@ -183,11 +184,13 @@ export default function GraphCanvas({
         onConnect={handleConnect}
         onEdgeClick={(e, edge) => editing && onDeleteEdge(edge.id)}
         onNodeClick={(e, node) => onSelect(node.id)}
+        onNodeDoubleClick={(e, node) => editing && onNodeDoubleClick(node.id)}
         onPaneClick={() => onSelect(null)}
         nodesDraggable={editing}
         nodesConnectable={editing}
         elementsSelectable
         deleteKeyCode={null}
+        zoomOnDoubleClick={!editing}
         minZoom={0.08}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
@@ -201,7 +204,7 @@ export default function GraphCanvas({
             pannable
             zoomable
             position="bottom-right"
-            style={{ marginBottom: 92 }}
+            style={{ width: 168, height: 108, marginBottom: 92 }}
             nodeColor={(n) => STATUS_COLOR[n.data.task.status]}
             nodeStrokeWidth={0}
             maskColor="rgba(0,0,0,0.35)"
