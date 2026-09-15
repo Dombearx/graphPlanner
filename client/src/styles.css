@@ -549,6 +549,62 @@ button, input, textarea, select { font: inherit; color: inherit; }
   font-size: 21px; font-weight: 750; font-variant-numeric: tabular-nums;
 }
 
+/* Sterowanie widokiem pilotem. Przyciski są celowo duże i o wysokim kontraście -
+   w trybie emulowanego kursora (TVBro) trafienie w mały cel jest męczarnią. */
+.tv-pad {
+  position: absolute; z-index: 6; right: 20px; bottom: 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 12px 14px 10px; border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+.tv-pad-grid {
+  display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px);
+  gap: 6px;
+}
+.tv-pad-grid .up { grid-area: 1 / 2; }
+.tv-pad-grid .left { grid-area: 2 / 1; }
+.tv-pad-grid .mid { grid-area: 2 / 2; }
+.tv-pad-grid .right { grid-area: 2 / 3; }
+.tv-pad-grid .down { grid-area: 3 / 2; }
+
+.tv-zoom { display: flex; gap: 6px; }
+.tv-zoom .tv-key { width: 86px; height: 48px; }
+
+.tv-key {
+  display: grid; place-items: center;
+  border: 1.5px solid var(--border-strong); border-radius: 14px;
+  background: var(--panel-2); color: var(--text);
+  cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+.tv-key:hover, .tv-key:focus-visible {
+  background: var(--accent); border-color: var(--accent); color: #fff; outline: none;
+}
+.tv-key:active { transform: scale(0.94); }
+.tv-pad-grid .mid { color: var(--text-dim); }
+
+.tv-pad-hint { margin: 0; font-size: 12.5px; color: var(--text-faint); text-align: center; }
+.tv-pad-hint b { color: var(--text-dim); font-weight: 700; }
+
+/* Zadanie wskazane pilotem musi być widoczne z drugiego końca pokoju,
+   dlatego pełny akcentowy obrys zamiast delikatnej poświaty. */
+.app.tv .task-node.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent), 0 8px 28px rgba(0, 0, 0, 0.5);
+  opacity: 1;
+}
+
+/* Nieco większy tekst w węźle. Geometria (260x148) zostaje nietknięta, więc
+   układ grafu i zapisane pozycje się nie rozjeżdżają - rośnie tylko treść. */
+.app.tv .tn-title { font-size: 15px; }
+.app.tv .tn-desc { font-size: 12.8px; }
+.app.tv .tn-count { font-size: 13px; }
+
+/* W trybie TV klika się emulowanym kursorem - paski narzędzi też muszą być większe. */
+.app.tv .toolbar { left: 20px; top: 20px; padding: 8px; gap: 8px; }
+.app.tv .toolbar .btn.small { min-height: 44px; padding: 8px 14px; font-size: 15px; border-radius: 12px; }
+
 /* ---------------- responsywnosc ---------------- */
 
 .drawer-backdrop { display: none; }

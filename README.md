@@ -23,7 +23,9 @@ tylko imię, żeby było wiadomo, kto się czym zajmuje.
 - **Synchronizacja na żywo (SSE)** – zmiana zrobiona na telefonie od razu widoczna na
   telewizorze, bez odświeżania strony.
 - **Widok listy na telefonie** – „co mogę teraz zrobić”, z przyciskami „Biorę” i `+1`.
-- **Tryb TV** – duży nagłówek z procentem ukończenia i licznikami, bez paneli bocznych.
+- **Tryb TV** – duży nagłówek z procentem ukończenia i licznikami, bez paneli bocznych,
+  z nawigacją pilotem: strzałki przeskakują między zadaniami i same przybliżają widok
+  do rozmiaru czytelnego z kanapy.
 - **Motyw jasny i ciemny.**
 
 ## Uruchomienie
@@ -85,6 +87,29 @@ razy więcej niż zadanie pojedyncze.
 - `+1` bezpośrednio na węźle zbija licznik bez otwierania panelu.
 - Przycisk z ikoną telewizora włącza tryb prezentacji; `?tv=1` w adresie startuje w nim od razu.
 - W trybie edycji kliknięcie strzałki usuwa zależność.
+
+### Sterowanie w trybie TV
+
+Cały graf na dużym ekranie jest nieczytelny – im więcej zadań, tym mniejszy tekst. Dlatego
+w trybie TV nie trzeba celować kursorem w płótno: pilot skacze po zadaniach, a widok sam
+ustawia się na wybranym zadaniu w powiększeniu, w którym tytuł i opis da się przeczytać.
+
+| Klawisz pilota                     | Działanie                                                     |
+| ---------------------------------- | ------------------------------------------------------------- |
+| strzałki / krzyżak                 | następne zadanie w danym kierunku, wycentrowane i przybliżone. |
+| `+` / `-` (też `PageUp`/`PageDown`)| przybliżenie i oddalenie wokół środka ekranu.                  |
+| `0`, `f`, `Home`                   | powrót do widoku całego grafu.                                 |
+
+Gdy w danym kierunku nie ma już zadania, strzałka przesuwa płótno – ale tylko dopóki graf
+zostaje na ekranie, więc pilotem nie da się zabłądzić w pustce.
+
+Przeglądarki telewizyjne (np. TVBro) często pracują w trybie emulowanego kursora, w którym
+krzyżak przesuwa wskaźnik zamiast wysyłać strzałki do strony. Na taki wypadek w prawym dolnym
+rogu jest panel z dużymi przyciskami: te same cztery kierunki, przybliżanie i „cały graf”.
+
+Kółko myszy (i jego emulacja przez pilota) w trybie TV **przesuwa** płótno zamiast zoomować –
+zoom „pod kursorem” skakał razem ze wskaźnikiem. Poza trybem TV wszystko działa jak dotąd:
+kółko przybliża, strzałki nie są przechwytywane.
 
 ## API
 
